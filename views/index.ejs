@@ -39,7 +39,17 @@
             const data = await response.json();
             document.getElementById("address-list").innerHTML += `<li>${data.newAddress}</li>`;
         });
-    </script>
+    <h3 class="mt-6 text-xl">Your BSV Address</h3>
+<p id="wallet-address" class="font-mono p-2 bg-gray-200 rounded"></p>
+<button onclick="copyAddress()" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded">Copy Address</button>
+
+<script>
+    function copyAddress() {
+        const address = document.getElementById("wallet-address").innerText;
+        navigator.clipboard.writeText(address);
+        alert("Address copied: " + address);
+    }
+</script>
 
 </body>
 </html>
