@@ -18,6 +18,7 @@ let userWallets = {};
 
 // Generate a new wallet
 app.post('/generate-wallet', (req, res) => {
+    res.json({ mnemonic, firstAddress });
     const mnemonic = bip39.generateMnemonic();
     const seed = bip39.mnemonicToSeedSync(mnemonic);
     const hdPrivateKey = bsv.HDPrivateKey.fromSeed(seed);
