@@ -1,6 +1,7 @@
 {
-  "name": "froggy-wallet",
+  "name": "froggy-bsv-wallet",
   "version": "1.0.0",
+  "description": "An advanced Bitcoin SV (BSV) web wallet with multi-address support, balance fetching, and transaction capabilities.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -10,6 +11,14 @@
     "body-parser": "^1.19.0",
     "bsv": "^1.5.6",
     "bip39": "^3.0.4",
-    "ejs": "^3.1.6"
-  }
+    "ejs": "^3.1.6",
+    "axios": "^1.4.0",
+    "path": "^0.12.7"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "keywords": ["BitcoinSV", "wallet", "cryptocurrency", "blockchain", "BSV"],
+  "author": "Froggy Wallet Dev",
+  "license": "MIT"
 }
