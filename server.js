@@ -6,6 +6,33 @@ const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+npm install axios
+const axios = require('axios');
+
+app.post('/send-bsv', async (req, res) => {
+    const { userId, recipientAddress, amount } = req.body;
+    if (!userWallets[userId]) {
+        return res.status(400).json({ error: "Wallet not found." });
+    }
+
+    const hdPrivateKey = new bsv.HDPrivateKey(userWallets[userId].hdPrivateKey);
+    const privateKey = hdPrivateKey.deriveChild("m/44'/0'/0'/0/0").privateKey;
+    
+    const transaction = new bsv.Transaction()
+        .from([{ address: userWallets[userId].addresses[0], satoshis: amount * 1e8 }])
+        .to(recipientAddress, amount * 1e8)
+        .sign(privateKey);
+
+    const rawTx = transaction.serialize();
+
+    try {
+        const response = await axios.post('https://api.whatsonchain.com/v1/bsv/main/tx/raw', { tx: rawTx });
+        res.json({ success: true, txid: response.data });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to send transaction." });
+    }
+});
+
 
 // Middleware
 app.use(bodyParser.json());
