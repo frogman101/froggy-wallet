@@ -1,5 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const session = require('express-session');
+const bcrypt = require('bcryptjs');
 const bsv = require('bsv');
 const bip39 = require('bip39');
 const axios = require('axios');
@@ -8,31 +10,83 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Session Setup (Handles User Logins)
+app.use(session({
+    secret: 'your-secret-key',
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: false } // Set to true if using HTTPS
+}));
+
 app.use(bodyParser.json());
 app.use(express.static('public'));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// In-Memory User Wallet Storage (Temporary for Now)
-let userWallets = {};
+let users = {}; // Temporary in-memory user storage (use database in production)
+let userWallets = {}; // Stores wallets per user (in-memory)
 
-// ✅ Generate a New Wallet (Seed Phrase + First Address)
+// ✅ User Registration
+app.post('/register', async (req, res) => {
+    const { username, password } = req.body;
+    if (users[username]) {
+        return res.status(400).json({ error: "Username already exists." });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    users[username] = { password: hashedPassword, wallets: [] };
+    res.json({ success: true, message: "User registered!" });
+});
+
+// ✅ User Login
+app.post('/login', async (req, res) => {
+    const { username, password } = req.body;
+    if (!users[username]) {
+        return res.status(400).json({ error: "User not found." });
+    }
+    const validPassword = await bcrypt.compare(password, users[username].password);
+    if (!validPassword) {
+        return res.status(400).json({ error: "Invalid credentials." });
+    }
+    req.session.user = username;
+    res.json({ success: true, message: "Login successful!" });
+});
+
+// ✅ User Logout
+app.get('/logout', (req, res) => {
+    req.session.destroy(() => {
+        res.redirect('/');
+    });
+});
+
+// ✅ Check if User is Logged In
+app.get('/session', (req, res) => {
+    if (req.session.user) {
+        res.json({ loggedIn: true, user: req.session.user });
+    } else {
+        res.json({ loggedIn: false });
+    }
+});
+
+// ✅ Generate Wallet (Seed Phrase & Address)
 app.post('/generate-wallet', (req, res) => {
+    const { userId } = req.body;
+    if (!req.session.user) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
     const mnemonic = bip39.generateMnemonic();
     const seed = bip39.mnemonicToSeedSync(mnemonic);
     const hdPrivateKey = bsv.HDPrivateKey.fromSeed(seed);
 
-    // Store wallet in memory (use database in production)
-    userWallets[req.body.userId] = {
+    userWallets[userId] = {
         mnemonic,
         hdPrivateKey: hdPrivateKey.toString(),
         addresses: []
     };
 
-    // Generate the first address
     const firstPrivateKey = hdPrivateKey.deriveChild("m/44'/0'/0'/0/0").privateKey;
     const firstAddress = firstPrivateKey.toAddress().toString();
-    userWallets[req.body.userId].addresses.push(firstAddress);
+    userWallets[userId].addresses.push(firstAddress);
 
     res.json({ mnemonic, firstAddress });
 });
@@ -53,7 +107,6 @@ app.post('/restore-wallet', (req, res) => {
         addresses: []
     };
 
-    // Generate the first address
     const firstPrivateKey = hdPrivateKey.deriveChild("m/44'/0'/0'/0/0").privateKey;
     const firstAddress = firstPrivateKey.toAddress().toString();
     userWallets[userId].addresses.push(firstAddress);
@@ -61,7 +114,7 @@ app.post('/restore-wallet', (req, res) => {
     res.json({ restoredAddress: firstAddress });
 });
 
-// ✅ Generate a New Address from the Same Wallet
+// ✅ Generate a New Address
 app.post('/generate-new-address', (req, res) => {
     const { userId } = req.body;
     if (!userWallets[userId]) {
@@ -78,20 +131,7 @@ app.post('/generate-new-address', (req, res) => {
     res.json({ newAddress });
 });
 
-// ✅ View Private Key (For Backup)
-app.post('/view-private-key', (req, res) => {
-    const { userId, index } = req.body;
-    if (!userWallets[userId]) {
-        return res.status(400).json({ error: "Wallet not found." });
-    }
-
-    const hdPrivateKey = new bsv.HDPrivateKey(userWallets[userId].hdPrivateKey);
-    const derivedPrivateKey = hdPrivateKey.deriveChild(`m/44'/0'/0'/0/${index}`).privateKey.toString();
-
-    res.json({ privateKey: derivedPrivateKey });
-});
-
-// ✅ Fetch Wallet Balance in BSV & USD
+// ✅ Get Wallet Balance (USD & BSV)
 app.post('/get-balance', async (req, res) => {
     const { address } = req.body;
     try {
@@ -106,17 +146,6 @@ app.post('/get-balance', async (req, res) => {
         res.json({ balanceInBSV, balanceInUSD });
     } catch (error) {
         res.status(500).json({ error: "Failed to fetch balance" });
-    }
-});
-
-// ✅ Fetch Transaction History
-app.post('/get-transactions', async (req, res) => {
-    const { address } = req.body;
-    try {
-        const response = await axios.get(`https://api.whatsonchain.com/v1/bsv/main/address/${address}/history`);
-        res.json({ transactions: response.data });
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch transactions" });
     }
 });
 
@@ -145,12 +174,12 @@ app.post('/send-bsv', async (req, res) => {
     }
 });
 
-// ✅ Serve Frontend UI
+// ✅ Serve UI
 app.get('/', (req, res) => {
     res.render('index', { addresses: [] });
 });
 
 // ✅ Start Server
 app.listen(PORT, () => {
-    console.log(`🚀 BSV Wallet Server Running on Port ${PORT}`);
+    console.log(`🚀 Froggy BSV Wallet Server Running on Port ${PORT}`);
 });
